@@ -1,3 +1,4 @@
 # Open Book Market Maker
+An HFT market making client for OpenBook on Solana.
 
-- Startup logic in StrategyManager class.
+- Installation Guide: [SETUP.md](SETUP.md)
