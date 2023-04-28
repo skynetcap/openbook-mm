@@ -11,3 +11,6 @@ Installation Steps:
 1. Docker build the image
 2. Run the image
 3. Profit
+
+Tested RPC Providers:
+1. Quicknode (Two $60 plans)
