@@ -695,7 +695,7 @@ public class OpenBookSolUsdc extends Strategy {
             newTx.addInstruction(
                     SerumProgram.cancelOrderByClientId(
                             solUsdcMarket,
-                            new PublicKey("1rAS3fWujnbcLZ7hNuMJbu2nFEubHyevKzYUfbPVLPY"),
+                            SOL_USDC_OOA,
                             OpenBookConfig.mmAccount.getPublicKey(),
                             OpenBookConfig.BID_CLIENT_ID
                     )
@@ -703,7 +703,7 @@ public class OpenBookSolUsdc extends Strategy {
             newTx.addInstruction(
                     SerumProgram.settleFunds(
                             solUsdcMarket,
-                            new PublicKey("1rAS3fWujnbcLZ7hNuMJbu2nFEubHyevKzYUfbPVLPY"),
+                            SOL_USDC_OOA,
                             OpenBookConfig.mmAccount.getPublicKey(),
                             sessionWsolAccount.getPublicKey(), //random wsol acct for settles
                             new PublicKey("A6Jcj1XV6QqDpdimmL7jm1gQtSP62j8BWbyqkdhe4eLe")
@@ -772,7 +772,7 @@ public class OpenBookSolUsdc extends Strategy {
             newTx.addInstruction(
                     SerumProgram.cancelOrderByClientId(
                             solUsdcMarket,
-                            new PublicKey("1rAS3fWujnbcLZ7hNuMJbu2nFEubHyevKzYUfbPVLPY"),
+                            SOL_USDC_OOA,
                             OpenBookConfig.mmAccount.getPublicKey(),
                             OpenBookConfig.ASK_CLIENT_ID
                     )
@@ -781,7 +781,7 @@ public class OpenBookSolUsdc extends Strategy {
             newTx.addInstruction(
                     SerumProgram.settleFunds(
                             solUsdcMarket,
-                            new PublicKey("1rAS3fWujnbcLZ7hNuMJbu2nFEubHyevKzYUfbPVLPY"),
+                            SOL_USDC_OOA,
                             OpenBookConfig.mmAccount.getPublicKey(),
                             sessionWsolAccount.getPublicKey(), //random wsol acct for settles
                             new PublicKey("A6Jcj1XV6QqDpdimmL7jm1gQtSP62j8BWbyqkdhe4eLe")
