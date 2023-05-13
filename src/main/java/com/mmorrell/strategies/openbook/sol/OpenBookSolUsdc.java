@@ -78,6 +78,7 @@ import static com.mmorrell.config.OpenBookConfig.SPACE_MONKEY;
 import static com.mmorrell.config.OpenBookConfig.START_SOL_PRICE;
 import static com.mmorrell.config.OpenBookConfig.TARGET_MAX_UNITS;
 import static com.mmorrell.config.OpenBookConfig.USDC_BID_AMOUNT_IN_WSOL;
+import static com.mmorrell.config.OpenBookConfig.USDC_QUOTE_WALLET;
 import static com.mmorrell.config.OpenBookConfig.USDC_THRESHOLD_TO_LEAN_WSOL;
 import static com.mmorrell.config.OpenBookConfig.generateLeanFactor;
 import static com.mmorrell.config.OpenBookConfig.getPriorityMicroLamports;
@@ -706,7 +707,7 @@ public class OpenBookSolUsdc extends Strategy {
                             SOL_USDC_OOA,
                             OpenBookConfig.mmAccount.getPublicKey(),
                             sessionWsolAccount.getPublicKey(), //random wsol acct for settles
-                            new PublicKey("A6Jcj1XV6QqDpdimmL7jm1gQtSP62j8BWbyqkdhe4eLe")
+                            USDC_QUOTE_WALLET
                     )
             );
             newTx.addInstruction(TokenProgram.closeAccount(
@@ -784,7 +785,7 @@ public class OpenBookSolUsdc extends Strategy {
                             SOL_USDC_OOA,
                             OpenBookConfig.mmAccount.getPublicKey(),
                             sessionWsolAccount.getPublicKey(), //random wsol acct for settles
-                            new PublicKey("A6Jcj1XV6QqDpdimmL7jm1gQtSP62j8BWbyqkdhe4eLe")
+                            USDC_QUOTE_WALLET
                     )
             );
 
