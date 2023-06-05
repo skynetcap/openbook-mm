@@ -1,7 +1,7 @@
 FROM maven:3.8.6-eclipse-temurin-17 AS build
 
-COPY gcloud.json /home/gcloud.json
-ENV GOOGLE_APPLICATION_CREDENTIALS /home/gcloud.json
+#COPY gcloud.json /home/gcloud.json
+#ENV GOOGLE_APPLICATION_CREDENTIALS /home/gcloud.json
 
 # Yourkit
 #RUN apt-get update \
