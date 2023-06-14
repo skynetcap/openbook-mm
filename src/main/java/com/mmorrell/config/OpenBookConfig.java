@@ -12,9 +12,7 @@ import java.util.Optional;
 @Slf4j
 public class OpenBookConfig {
 
-    // Edit these for SOL/USDC
-    public static final PublicKey SOL_USDC_OOA
-            = new PublicKey("1rAS3fWujnbcLZ7hNuMJbu2nFEubHyevKzYUfbPVLPY");
+    // User-set
     public static final PublicKey USDC_QUOTE_WALLET
             = new PublicKey("A6Jcj1XV6QqDpdimmL7jm1gQtSP62j8BWbyqkdhe4eLe");
 
