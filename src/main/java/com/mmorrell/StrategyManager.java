@@ -1,8 +1,6 @@
 package com.mmorrell;
 
-import com.mmorrell.strategies.openbook.sol.OpenBookJitoSolUsdc;
 import com.mmorrell.strategies.openbook.sol.OpenBookSolUsdc;
-import com.mmorrell.strategies.openbook.sol.OpenBookStSolUsdc;
 import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
@@ -23,9 +21,6 @@ public class StrategyManager {
     @PostConstruct
     public void strategyStartup() {
         openBookSolUsdc.start();
-//        openBookJitoSolUsdc.start();
-//        openBookStSolUsdc.start();
     }
-
 
 }

@@ -13,6 +13,7 @@ import com.mmorrell.serum.model.SelfTradeBehaviorLayout;
 import com.mmorrell.serum.model.SerumUtils;
 import com.mmorrell.serum.program.SerumProgram;
 import com.mmorrell.strategies.Strategy;
+import jakarta.annotation.PostConstruct;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.p2p.solanaj.core.Account;
@@ -25,6 +26,7 @@ import org.p2p.solanaj.rpc.RpcClient;
 import org.p2p.solanaj.rpc.RpcException;
 import org.p2p.solanaj.rpc.types.config.Commitment;
 import org.springframework.beans.factory.annotation.Qualifier;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.io.ClassPathResource;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
@@ -56,8 +58,6 @@ import static com.mmorrell.config.OpenBookConfig.BID_SPREAD_MULTIPLIER;
 import static com.mmorrell.config.OpenBookConfig.CROSS_DETECTION_PADDING;
 import static com.mmorrell.config.OpenBookConfig.DEFAULT_ASK_SPREAD_MULTIPLIER;
 import static com.mmorrell.config.OpenBookConfig.DEFAULT_BID_SPREAD_MULTIPLIER;
-import static com.mmorrell.config.OpenBookConfig.EVENT_QUEUE_SIZE_ASK_WIDEN;
-import static com.mmorrell.config.OpenBookConfig.EVENT_QUEUE_SIZE_THRESHOLD_FOR_WIDEN;
 import static com.mmorrell.config.OpenBookConfig.GIGA_LEANING;
 import static com.mmorrell.config.OpenBookConfig.IS_WSOL_LEANING;
 import static com.mmorrell.config.OpenBookConfig.KNOWN_FISH;
@@ -73,12 +73,10 @@ import static com.mmorrell.config.OpenBookConfig.PYTH_PREDICTIVE_FACTOR_BIDS;
 import static com.mmorrell.config.OpenBookConfig.SOL_ASK_AMOUNT;
 import static com.mmorrell.config.OpenBookConfig.SOL_QUOTE_SIZE;
 import static com.mmorrell.config.OpenBookConfig.SOL_USDC_MARKET_ID;
-import static com.mmorrell.config.OpenBookConfig.SOL_USDC_OOA;
 import static com.mmorrell.config.OpenBookConfig.SPACE_MONKEY;
 import static com.mmorrell.config.OpenBookConfig.START_SOL_PRICE;
 import static com.mmorrell.config.OpenBookConfig.TARGET_MAX_UNITS;
 import static com.mmorrell.config.OpenBookConfig.USDC_BID_AMOUNT_IN_WSOL;
-import static com.mmorrell.config.OpenBookConfig.USDC_QUOTE_WALLET;
 import static com.mmorrell.config.OpenBookConfig.USDC_THRESHOLD_TO_LEAN_WSOL;
 import static com.mmorrell.config.OpenBookConfig.generateLeanFactor;
 import static com.mmorrell.config.OpenBookConfig.getPriorityMicroLamports;
@@ -108,6 +106,14 @@ public class OpenBookSolUsdc extends Strategy {
     private List<Order> bidOrders;
     private List<Order> askOrders;
 
+    @Value("${openbook.strategies.solusdc.ooa}")
+    public String solUsdcOoa;
+    private PublicKey solUsdcOoaPubkey;
+
+    @Value("${openbook.strategies.solusdc.quoteWallet}")
+    public String solUsdcQuoteWallet;
+    private PublicKey solUsdcQuoteWalletPubkey;
+
     public OpenBookSolUsdc(final SerumManager serumManager,
                            final RpcClient rpcClient,
                            @Qualifier("data") final RpcClient dataRpcClient,
@@ -128,6 +134,13 @@ public class OpenBookSolUsdc extends Strategy {
         this.bestBidPrice = solUsdcMarket.getBidOrderBook().getBestBid().getFloatPrice();
         this.bestAskPrice = solUsdcMarket.getAskOrderBook().getBestAsk().getFloatPrice();
         updateOb();
+    }
+
+    @PostConstruct
+    public void init() {
+        this.solUsdcOoaPubkey = new PublicKey(solUsdcOoa);
+        this.solUsdcQuoteWalletPubkey = new PublicKey(solUsdcQuoteWallet);
+        log.info("SOL/USDC OOA: " + solUsdcOoaPubkey.toBase58());
     }
 
     private void solUsdcEventLoop() {
@@ -151,13 +164,13 @@ public class OpenBookSolUsdc extends Strategy {
                     .min((o1, o2) -> Float.compare(o1.getFloatPrice(), o2.getFloatPrice()));
             this.bestBidPrice = bidOrders.stream()
                     .filter(order -> !KNOWN_FISH.contains(order.getOwner()))
-                    .filter(order -> !order.getOwner().equals(SOL_USDC_OOA)) // not us either
+                    .filter(order -> !order.getOwner().equals(solUsdcOoaPubkey)) // not us either
                     .max((o1, o2) -> Float.compare(o1.getFloatPrice(), o2.getFloatPrice()))
                     .map(Order::getFloatPrice)
                     .orElse(bestBid.getFloatPrice());
             this.bestAskPrice = askOrders.stream()
                     .filter(order -> !KNOWN_FISH.contains(order.getOwner()))
-                    .filter(order -> !order.getOwner().equals(SOL_USDC_OOA)) // not us either
+                    .filter(order -> !order.getOwner().equals(solUsdcOoaPubkey)) // not us either
                     .min((o1, o2) -> Float.compare(o1.getFloatPrice(), o2.getFloatPrice()))
                     .map(Order::getFloatPrice)
                     .orElse(bestAsk.getFloatPrice());
@@ -167,7 +180,7 @@ public class OpenBookSolUsdc extends Strategy {
                 if (fishOrder.getFloatPrice() <= bestAskPrice) {
                     Optional<Order> topOfBookNotFish = askOrders.stream()
                             .filter(order -> !KNOWN_FISH.contains(order.getOwner()))
-                            .filter(order -> !order.getOwner().equals(SOL_USDC_OOA)) // not us either
+                            .filter(order -> !order.getOwner().equals(solUsdcOoaPubkey)) // not us either
                             .min((o1, o2) -> Float.compare(o1.getFloatPrice(), o2.getFloatPrice()));
                     topOfBookNotFish.ifPresent(order -> this.bestAskPrice =
                             (fishOrder.getFloatPrice() + order.getFloatPrice()) / 2.0);
@@ -175,7 +188,7 @@ public class OpenBookSolUsdc extends Strategy {
             }
             boolean isCancelBid, isReadyToNewBid, shouldCancelBid;
             synchronized (this) {
-                isCancelBid = bidOrders.stream().anyMatch(order -> order.getOwner().equals(SOL_USDC_OOA));
+                isCancelBid = bidOrders.stream().anyMatch(order -> order.getOwner().equals(solUsdcOoaPubkey));
                 isReadyToNewBid = Math.abs(Duration.between(Instant.now(), lastBidTimestamp).toSeconds()) >=
                         NEW_ORDER_DELAY_DURATION_SECONDS;
                 shouldCancelBid = isCancelBid || !isReadyToNewBid;
@@ -222,7 +235,7 @@ public class OpenBookSolUsdc extends Strategy {
 
             Order ourCurrentBid = null;
             for (Order bidOrder : bidOrders) {
-                if (bidOrder.getOwner().equals(SOL_USDC_OOA)) {
+                if (bidOrder.getOwner().equals(solUsdcOoaPubkey)) {
                     if (ourCurrentBid == null || bidOrder.getFloatPrice() >= ourCurrentBid.getFloatPrice()) {
                         ourCurrentBid = bidOrder; // use this as our best bid
                     }
@@ -246,7 +259,7 @@ public class OpenBookSolUsdc extends Strategy {
             final float finalSmoothedBidPrice = smoothedBidPrice;
             Optional<Order> sharpAboveBid = bidOrders.stream()
                     .filter(order -> order.getFloatPrice() >= finalSmoothedBidPrice)
-                    .filter(order -> !order.getOwner().equals(SOL_USDC_OOA))
+                    .filter(order -> !order.getOwner().equals(solUsdcOoaPubkey))
                     .filter(order -> KNOWN_SHARPS.contains(order.getOwner()))
                     .min((o1, o2) -> Float.compare(o1.getFloatPrice(), o2.getFloatPrice()))
                     .stream().findAny();
@@ -274,7 +287,7 @@ public class OpenBookSolUsdc extends Strategy {
             // Asks
             boolean isCancelAsk, isReadyToPlaceNewAsk, shouldCancelAsk;
             synchronized (this) {
-                isCancelAsk = askOrders.stream().anyMatch(order -> order.getOwner().equals(SOL_USDC_OOA));
+                isCancelAsk = askOrders.stream().anyMatch(order -> order.getOwner().equals(solUsdcOoaPubkey));
                 isReadyToPlaceNewAsk = Math.abs(Duration.between(Instant.now(), lastAskTimestamp).toSeconds()) >=
                         NEW_ORDER_DELAY_DURATION_SECONDS;
                 shouldCancelAsk = isCancelAsk || !isReadyToPlaceNewAsk;
@@ -331,7 +344,7 @@ public class OpenBookSolUsdc extends Strategy {
             }
             Order ourCurrentAsk = null;
             for (Order askOrder : askOrders) {
-                if (askOrder.getOwner().equals(SOL_USDC_OOA)) {
+                if (askOrder.getOwner().equals(solUsdcOoaPubkey)) {
                     if (ourCurrentAsk == null || askOrder.getFloatPrice() <= ourCurrentAsk.getFloatPrice()) {
                         // use this as our best ask
                         ourCurrentAsk = askOrder;
@@ -359,7 +372,7 @@ public class OpenBookSolUsdc extends Strategy {
             askSharps.add(PublicKey.valueOf("7pYyuhKrMTswQqZ9eXx813Qsx99yzvnbaUD3mUvX7wFm")); // ground
             Optional<Order> jumpsBestAsk = askOrders.stream()
                     .filter(order -> order.getFloatPrice() < nextPlacedAskFinal)
-                    .filter(order -> !order.getOwner().equals(SOL_USDC_OOA))
+                    .filter(order -> !order.getOwner().equals(solUsdcOoaPubkey))
                     .filter(order -> askSharps.contains(order.getOwner()))
                     .max((o1, o2) -> Float.compare(o1.getFloatPrice(), o2.getFloatPrice()))
                     .stream().findAny();
@@ -479,10 +492,10 @@ public class OpenBookSolUsdc extends Strategy {
         placeTx.addInstruction(
                 SerumProgram.consumeEvents(
                         OpenBookConfig.mmAccount.getPublicKey(),
-                        List.of(SOL_USDC_OOA),
+                        List.of(solUsdcOoaPubkey),
                         solUsdcMarket,
                         OpenBookConfig.WSOL_BASE_WALLET,
-                        OpenBookConfig.USDC_QUOTE_WALLET
+                        solUsdcQuoteWalletPubkey
                 )
         );
         float inputPrice = price;
@@ -512,7 +525,7 @@ public class OpenBookSolUsdc extends Strategy {
             placeTx.addInstruction(
                     SerumProgram.cancelOrderByClientId(
                             solUsdcMarket,
-                            SOL_USDC_OOA,
+                            solUsdcOoaPubkey,
                             OpenBookConfig.mmAccount.getPublicKey(),
                             OpenBookConfig.ASK_CLIENT_ID
                     )
@@ -524,26 +537,26 @@ public class OpenBookSolUsdc extends Strategy {
         placeTx.addInstruction(
                 SerumProgram.consumeEvents(
                         OpenBookConfig.mmAccount.getPublicKey(),
-                        List.of(SOL_USDC_OOA),
+                        List.of(solUsdcOoaPubkey),
                         solUsdcMarket,
                         OpenBookConfig.WSOL_BASE_WALLET,
-                        OpenBookConfig.USDC_QUOTE_WALLET
+                        solUsdcQuoteWalletPubkey
                 )
         );
         placeTx.addInstruction(
                 SerumProgram.settleFunds(
                         solUsdcMarket,
-                        SOL_USDC_OOA,
+                        solUsdcOoaPubkey,
                         OpenBookConfig.mmAccount.getPublicKey(),
                         OpenBookConfig.WSOL_BASE_WALLET, //random wsol acct for settles
-                        OpenBookConfig.USDC_QUOTE_WALLET
+                        solUsdcQuoteWalletPubkey
                 )
         );
         placeTx.addInstruction(
                 SerumProgram.placeOrder(
                         OpenBookConfig.mmAccount,
                         OpenBookConfig.WSOL_BASE_WALLET,
-                        SOL_USDC_OOA,
+                        solUsdcOoaPubkey,
                         solUsdcMarket,
                         askOrder
                 )
@@ -576,10 +589,10 @@ public class OpenBookSolUsdc extends Strategy {
         placeTx.addInstruction(
                 SerumProgram.consumeEvents(
                         OpenBookConfig.mmAccount.getPublicKey(),
-                        List.of(SOL_USDC_OOA),
+                        List.of(solUsdcOoaPubkey),
                         solUsdcMarket,
                         OpenBookConfig.WSOL_BASE_WALLET,
-                        OpenBookConfig.USDC_QUOTE_WALLET
+                        solUsdcQuoteWalletPubkey
                 )
         );
         float inputPrice = price;
@@ -609,7 +622,7 @@ public class OpenBookSolUsdc extends Strategy {
             placeTx.addInstruction(
                     SerumProgram.cancelOrderByClientId(
                             solUsdcMarket,
-                            SOL_USDC_OOA,
+                            solUsdcOoaPubkey,
                             OpenBookConfig.mmAccount.getPublicKey(),
                             OpenBookConfig.BID_CLIENT_ID
                     )
@@ -621,26 +634,26 @@ public class OpenBookSolUsdc extends Strategy {
         placeTx.addInstruction(
                 SerumProgram.consumeEvents(
                         OpenBookConfig.mmAccount.getPublicKey(),
-                        List.of(SOL_USDC_OOA),
+                        List.of(solUsdcOoaPubkey),
                         solUsdcMarket,
                         OpenBookConfig.WSOL_BASE_WALLET,
-                        OpenBookConfig.USDC_QUOTE_WALLET
+                        solUsdcQuoteWalletPubkey
                 )
         );
         placeTx.addInstruction(
                 SerumProgram.settleFunds(
                         solUsdcMarket,
-                        SOL_USDC_OOA,
+                        solUsdcOoaPubkey,
                         OpenBookConfig.mmAccount.getPublicKey(),
                         OpenBookConfig.WSOL_BASE_WALLET, //random wsol acct for settles
-                        OpenBookConfig.USDC_QUOTE_WALLET
+                        solUsdcQuoteWalletPubkey
                 )
         );
         placeTx.addInstruction(
                 SerumProgram.placeOrder(
                         OpenBookConfig.mmAccount,
-                        OpenBookConfig.USDC_QUOTE_WALLET,
-                        SOL_USDC_OOA,
+                        solUsdcQuoteWalletPubkey,
+                        solUsdcOoaPubkey,
                         solUsdcMarket,
                         bidOrder
                 )
@@ -696,7 +709,7 @@ public class OpenBookSolUsdc extends Strategy {
             newTx.addInstruction(
                     SerumProgram.cancelOrderByClientId(
                             solUsdcMarket,
-                            SOL_USDC_OOA,
+                            solUsdcOoaPubkey,
                             OpenBookConfig.mmAccount.getPublicKey(),
                             OpenBookConfig.BID_CLIENT_ID
                     )
@@ -704,10 +717,10 @@ public class OpenBookSolUsdc extends Strategy {
             newTx.addInstruction(
                     SerumProgram.settleFunds(
                             solUsdcMarket,
-                            SOL_USDC_OOA,
+                            solUsdcOoaPubkey,
                             OpenBookConfig.mmAccount.getPublicKey(),
                             sessionWsolAccount.getPublicKey(), //random wsol acct for settles
-                            USDC_QUOTE_WALLET
+                            solUsdcQuoteWalletPubkey
                     )
             );
             newTx.addInstruction(TokenProgram.closeAccount(
@@ -773,7 +786,7 @@ public class OpenBookSolUsdc extends Strategy {
             newTx.addInstruction(
                     SerumProgram.cancelOrderByClientId(
                             solUsdcMarket,
-                            SOL_USDC_OOA,
+                            solUsdcOoaPubkey,
                             OpenBookConfig.mmAccount.getPublicKey(),
                             OpenBookConfig.ASK_CLIENT_ID
                     )
@@ -782,10 +795,10 @@ public class OpenBookSolUsdc extends Strategy {
             newTx.addInstruction(
                     SerumProgram.settleFunds(
                             solUsdcMarket,
-                            SOL_USDC_OOA,
+                            solUsdcOoaPubkey,
                             OpenBookConfig.mmAccount.getPublicKey(),
                             sessionWsolAccount.getPublicKey(), //random wsol acct for settles
-                            USDC_QUOTE_WALLET
+                            solUsdcQuoteWalletPubkey
                     )
             );
 
@@ -870,7 +883,7 @@ public class OpenBookSolUsdc extends Strategy {
     private Optional<Double> getUsdcBalance() {
         try {
             double amount = dataRpcClient.getApi().getTokenAccountBalance(
-                            OpenBookConfig.USDC_QUOTE_WALLET,
+                            solUsdcQuoteWalletPubkey,
                             Commitment.PROCESSED
                     )
                     .getUiAmount();
@@ -933,6 +946,8 @@ public class OpenBookSolUsdc extends Strategy {
     @Override
     public void start() {
         log.info(this.getClass().getSimpleName() + " started.");
+        log.info("OOA: " + solUsdcOoaPubkey.toBase58());
+        log.info("Quote Wallet: " + solUsdcQuoteWalletPubkey.toBase58());
         final Runnable solUsdcEventLoopRunnable = this::eventLoopWithCatch;
         executorService.scheduleAtFixedRate(
                 solUsdcEventLoopRunnable,
@@ -957,10 +972,10 @@ public class OpenBookSolUsdc extends Strategy {
         mktSellTx.addInstruction(
                 SerumProgram.consumeEvents(
                         OpenBookConfig.mmAccount.getPublicKey(),
-                        List.of(SOL_USDC_OOA),
+                        List.of(solUsdcOoaPubkey),
                         solUsdcMarket,
                         OpenBookConfig.WSOL_BASE_WALLET,
-                        OpenBookConfig.USDC_QUOTE_WALLET
+                        solUsdcQuoteWalletPubkey
                 )
         );
 
@@ -977,27 +992,27 @@ public class OpenBookSolUsdc extends Strategy {
         mktSellTx.addInstruction(
                 SerumProgram.consumeEvents(
                         OpenBookConfig.mmAccount.getPublicKey(),
-                        List.of(SOL_USDC_OOA),
+                        List.of(solUsdcOoaPubkey),
                         solUsdcMarket,
                         OpenBookConfig.WSOL_BASE_WALLET,
-                        OpenBookConfig.USDC_QUOTE_WALLET
+                        solUsdcQuoteWalletPubkey
                 )
         );
 
         mktSellTx.addInstruction(
                 SerumProgram.settleFunds(
                         solUsdcMarket,
-                        SOL_USDC_OOA,
+                        solUsdcOoaPubkey,
                         OpenBookConfig.mmAccount.getPublicKey(),
                         OpenBookConfig.WSOL_BASE_WALLET, //random wsol acct for settles
-                        OpenBookConfig.USDC_QUOTE_WALLET
+                        solUsdcQuoteWalletPubkey
                 )
         );
         mktSellTx.addInstruction(
                 SerumProgram.placeOrder(
                         OpenBookConfig.mmAccount,
                         OpenBookConfig.WSOL_BASE_WALLET,
-                        SOL_USDC_OOA,
+                        solUsdcOoaPubkey,
                         solUsdcMarket,
                         askOrder
                 )
@@ -1005,10 +1020,10 @@ public class OpenBookSolUsdc extends Strategy {
         mktSellTx.addInstruction(
                 SerumProgram.settleFunds(
                         solUsdcMarket,
-                        SOL_USDC_OOA,
+                        solUsdcOoaPubkey,
                         OpenBookConfig.mmAccount.getPublicKey(),
                         OpenBookConfig.WSOL_BASE_WALLET, //random wsol acct for settles
-                        OpenBookConfig.USDC_QUOTE_WALLET
+                        solUsdcQuoteWalletPubkey
                 )
         );
 
@@ -1025,10 +1040,10 @@ public class OpenBookSolUsdc extends Strategy {
 
     // @Scheduled(fixedRate = 5_000L)
     public void hardCxlDetectionLoop() {
-        if (bidOrders.stream().filter(order -> order.getOwner().equals(SOL_USDC_OOA)).count() > 1) {
+        if (bidOrders.stream().filter(order -> order.getOwner().equals(solUsdcOoaPubkey)).count() > 1) {
             hardCancelSingleBid();
         }
-        if (askOrders.stream().filter(order -> order.getOwner().equals(SOL_USDC_OOA)).count() > 1) {
+        if (askOrders.stream().filter(order -> order.getOwner().equals(solUsdcOoaPubkey)).count() > 1) {
             hardCancelSingleAsk();
         }
     }
