@@ -2,6 +2,7 @@
 An HFT market making client for OpenBook on Solana.
 
 - Installation Guide: [SETUP.md](SETUP.md)
+- SOL/USDC Strategy: [OpenBookSolUsdc](../src/main/java/com/mmorrell/strategies/openbook/sol/OpenBookSolUsdc.java)
 
 ## Adding New Strategy
 
