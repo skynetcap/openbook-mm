@@ -14,3 +14,7 @@ An HFT market making client for OpenBook on Solana.
 ## Additional Notes
 
 - The current state is a proof-of-concept, but the project is being modularized in this repo.
+
+## License
+
+- MIT 
