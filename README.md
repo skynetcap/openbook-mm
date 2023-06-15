@@ -7,6 +7,6 @@ An HFT market making client for OpenBook on Solana.
 
 - Create class MyNewStrategy `extends Strategy`.
 - Create bean of MyNewStrategy using `@Component` annotation, or in a config.
-- Override `void start()` in the interface with business logic
-- Wire bean into `StrategyManager` constructor
-- Add `myNewStrategy.start()` call to `StrategyManager.strategyStartup`
+- Override `void start()` from the Strategy interface with business logic.
+- Wire bean into `StrategyManager` constructor.
+- Add `myNewStrategy.start()` call to `StrategyManager.strategyStartup`.
