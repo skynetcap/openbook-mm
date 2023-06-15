@@ -11,6 +11,18 @@ An HFT market making client for OpenBook on Solana.
 - Wire `MyNewStrategy` bean into `StrategyManager` constructor.
 - Add `myNewStrategy.start()` call inside of `StrategyManager.strategyStartup()`.
 
+## Architecture
+
+- `OpenBookSolUsdc` extends `Strategy`
+  - implements `start()`
+- `Strategy` contains 1 void method `start()`
+
+Future:
+- `OpenBookSolUsdc` extends `OpenBookStrategy`
+  - Provides `marketId`
+  - implements `start()`
+- `OpenBookStrategy` extends `Strategy`
+
 ## Additional Notes
 
 - The current state is a proof-of-concept, but the project is being modularized in this repo.
